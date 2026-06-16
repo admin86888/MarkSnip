@@ -52,6 +52,95 @@
     return href;
   }
 
+  const LAZY_IMAGE_SOURCE_ATTRIBUTES = Object.freeze([
+    'data-src',
+    'data-original',
+    'data-original-src',
+    'data-lazy-src',
+    'data-actualsrc',
+    'data-full-src',
+    'data-large-src',
+    'data-hi-res-src',
+    'data-image-src'
+  ]);
+
+  function normalizeImageSourceValue(value) {
+    return String(value || '').trim();
+  }
+
+  function isPlaceholderImageSrc(src) {
+    const normalizedSrc = normalizeImageSourceValue(src).toLowerCase();
+    if (!normalizedSrc) {
+      return true;
+    }
+
+    if (normalizedSrc === '#' || normalizedSrc === 'about:blank') {
+      return true;
+    }
+
+    if (normalizedSrc.startsWith('data:image/svg+xml')) {
+      return true;
+    }
+
+    if (normalizedSrc.startsWith('data:image/gif')) {
+      return normalizedSrc.length < 160;
+    }
+
+    return false;
+  }
+
+  function isUsableImageSrc(src) {
+    return !isPlaceholderImageSrc(src);
+  }
+
+  function getLazyImageSource(node) {
+    if (!node?.getAttribute) {
+      return '';
+    }
+
+    for (const attributeName of LAZY_IMAGE_SOURCE_ATTRIBUTES) {
+      const candidate = normalizeImageSourceValue(node.getAttribute(attributeName));
+      if (isUsableImageSrc(candidate)) {
+        return candidate;
+      }
+    }
+
+    return '';
+  }
+
+  function hasLazyImageRewriteMarkers(src) {
+    const parsedUrl = safeParseUrl(src);
+    if (!parsedUrl) {
+      return false;
+    }
+
+    return ['wx_lazy', 'wxfrom', 'wx_co'].some((name) => parsedUrl.searchParams.has(name));
+  }
+
+  function resolveImageSource(node) {
+    if (!node?.getAttribute) {
+      return '';
+    }
+
+    const src = normalizeImageSourceValue(node.getAttribute('src'));
+    const lazySource = getLazyImageSource(node);
+
+    if (lazySource && (!isUsableImageSrc(src) || hasLazyImageRewriteMarkers(src))) {
+      return lazySource;
+    }
+
+    return src;
+  }
+
+  function getImageExtensionFromQuery(src) {
+    const parsedUrl = safeParseUrl(src);
+    const extension = parsedUrl?.searchParams?.get('wx_fmt');
+    if (/^[a-zA-Z]+$/.test(extension || '')) {
+      return extension;
+    }
+    return '';
+  }
+
   const IMAGE_PLACEMENT_MODES = Object.freeze({
     SAME_FOLDER: 'sameFolder',
     SIDECAR: 'sidecar',
@@ -128,7 +217,8 @@
 
     const extension = filename.substring(filename.lastIndexOf('.'));
     if (extension === filename) {
-      filename = filename + '.idunno';
+      const queryExtension = getImageExtensionFromQuery(src);
+      filename = filename + '.' + (queryExtension || 'idunno');
     }
 
     filename = generateValidFileName(
@@ -205,6 +295,9 @@
     normalizeImagePlacementMode,
     getMarkdownTitleFolder,
     getMarkdownTitleBaseName,
+    isPlaceholderImageSrc,
+    isUsableImageSrc,
+    resolveImageSource,
     getImageBaseFilename,
     resolveImagePath,
     buildImageDownloadFilename,

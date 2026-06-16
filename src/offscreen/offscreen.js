@@ -1385,11 +1385,12 @@ function turndown(content, options, article) {
   // add an image rule
   turndownService.addRule('images', {
     filter: function (node, tdopts) {
-      // if we're looking at an img node with a src
-      if (node.nodeName == 'IMG' && node.getAttribute('src')) {
+      // if we're looking at an img node with a usable source
+      if (node.nodeName == 'IMG') {
         
         // get the original src
-        let src = node.getAttribute('src')
+        let src = resolveImageSource(node);
+        if (!src) return false;
         const resolvedSrc = validateUri(src, uriBase);
         // set the new src
         node.setAttribute('src', resolvedSrc);
@@ -2418,6 +2419,15 @@ function validateUri(href, baseURI) {
    return new URL(href, baseURI).href;
  }
  return href;
+}
+
+function resolveImageSource(node) {
+ const sharedApi = getUrlUtilsApi();
+ if (sharedApi?.resolveImageSource) {
+   return sharedApi.resolveImageSource(node);
+ }
+
+ return node?.getAttribute?.('src') || '';
 }
 
 /**

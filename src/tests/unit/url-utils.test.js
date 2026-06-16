@@ -5,6 +5,7 @@ const {
   normalizeImagePlacementMode,
   getMarkdownTitleFolder,
   getMarkdownTitleBaseName,
+  resolveImageSource,
   resolveImagePath,
   buildImageDownloadFilename,
   getImageFilename
@@ -196,6 +197,20 @@ describe('URL utils', () => {
       expect(filename).toContain('.idunno');
     });
 
+    test('infers image extension from WeChat wx_fmt query parameter', () => {
+      const options = {
+        title: 'Notes',
+        imagePrefix: ''
+      };
+      const filename = getImageFilename(
+        'https://mmbiz.qpic.cn/mmbiz_jpg/example/640?wx_fmt=jpeg&tp=webp&wxfrom=5',
+        options,
+        false
+      );
+
+      expect(filename).toBe('640.jpeg');
+    });
+
     test('passes configured filename replacement to image filename sanitizer', () => {
       const options = {
         title: 'Notes',
@@ -247,6 +262,44 @@ describe('URL utils', () => {
         jest.resetModules();
         global.markSnipTemplateUtils = previousTemplateUtils;
       }
+    });
+  });
+
+  describe('resolveImageSource', () => {
+    function createImageNode(attributes) {
+      return {
+        nodeName: 'IMG',
+        getAttribute(name) {
+          return attributes[name] || '';
+        }
+      };
+    }
+
+    test('prefers WeChat data-src over rewritten lazy loading src values', () => {
+      const node = createImageNode({
+        src: 'https://mmbiz.qpic.cn/mmbiz_png/example/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1',
+        'data-src': 'https://mmbiz.qpic.cn/mmbiz_jpg/example/640?wx_fmt=jpeg'
+      });
+
+      expect(resolveImageSource(node)).toBe('https://mmbiz.qpic.cn/mmbiz_jpg/example/640?wx_fmt=jpeg');
+    });
+
+    test('keeps normal image src when it is already usable', () => {
+      const node = createImageNode({
+        src: 'https://example.com/photo.jpg',
+        'data-src': 'https://tracker.example.com/tiny.gif'
+      });
+
+      expect(resolveImageSource(node)).toBe('https://example.com/photo.jpg');
+    });
+
+    test('falls back to data-src when src is a placeholder', () => {
+      const node = createImageNode({
+        src: 'data:image/svg+xml,%3Csvg%3E%3C/svg%3E',
+        'data-src': 'https://example.com/real.png'
+      });
+
+      expect(resolveImageSource(node)).toBe('https://example.com/real.png');
     });
   });
 });
