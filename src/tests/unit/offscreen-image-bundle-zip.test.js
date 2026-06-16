@@ -11,6 +11,7 @@ const zipUtilsSource = fs.readFileSync(
   path.join(__dirname, '../../shared/zip-utils.js'),
   'utf8'
 );
+const obsidianUtils = require('../../shared/obsidian-utils');
 
 function parseStoredZip(blobBytes) {
   const entries = {};
@@ -79,7 +80,11 @@ function createOffscreenSandbox() {
     },
     chrome: {},
     defaultOptions: {},
+    markSnipObsidian: obsidianUtils,
     markSnipUrlUtils: require('../../shared/url-utils'),
+    mimedb: {
+      'image/png': 'png'
+    },
     URL: {
       createObjectURL: jest.fn((blob) => {
         const url = `blob:marksnip-test/${++blobIndex}`;
@@ -117,6 +122,38 @@ function createOffscreenSandbox() {
 }
 
 describe('offscreen image bundle ZIP downloads', () => {
+  test('keeps original image URL in the download list when offscreen prefetch fails', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const { sandbox, blobStore } = createOffscreenSandbox();
+    const imageBytes = Uint8Array.from([137, 80, 78, 71]);
+    const reachableImageUrl = sandbox.URL.createObjectURL(new NodeBlob([imageBytes], { type: 'image/png' }));
+    const blockedImageUrl = 'https://cdn.example.test/protected/photo.png';
+
+    let result;
+    try {
+      result = await sandbox.preDownloadImages(
+        {
+          [reachableImageUrl]: 'Page/reachable.png',
+          [blockedImageUrl]: 'Page/protected.png'
+        },
+        '# Page\n\n![](Page/reachable.png)\n\n![](Page/protected.png)',
+        {
+          imageStyle: 'markdown'
+        }
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+
+    expect(result.imageList['blob:marksnip-test/2']).toBe('Page/reachable.png');
+    expect(result.imageList[blockedImageUrl]).toBe('Page/protected.png');
+    expect(Object.keys(result.imageList)).toHaveLength(2);
+    expect(blobStore.get('blob:marksnip-test/2')).toBeTruthy();
+    expect(result.sourceImageMap['Page/reachable.png']).toBe(reachableImageUrl);
+    expect(result.sourceImageMap['Page/protected.png']).toBe(blockedImageUrl);
+    expect(result.markdown).toBe('# Page\n\n![](Page/reachable.png)\n\n![](Page/protected.png)');
+  });
+
   test('stores binary ZIP entries without text encoding them', async () => {
     const { sandbox } = createOffscreenSandbox();
     const imageBytes = Uint8Array.from([0, 1, 2, 128, 255]);
@@ -172,7 +209,7 @@ describe('offscreen image bundle ZIP downloads', () => {
 
   test('untracks and revokes ZIP URL when bundled ZIP download start fails', async () => {
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const { sandbox, messages, downloads, blobStore } = createOffscreenSandbox();
+    const { sandbox, messages, downloads } = createOffscreenSandbox();
     const imageBytes = Uint8Array.from([137, 80, 78, 71]);
     const imageUrl = sandbox.URL.createObjectURL(new NodeBlob([imageBytes], { type: 'image/png' }));
 

@@ -19,6 +19,7 @@
     "start:androidwin11": "adb connect 127.0.0.1:58526 && web-ext run -t firefox-android --adb-device 127.0.0.1:58526 --firefox-apk org.mozilla.fenix",
     "test": "jest",
     "test:unit": "jest --testPathPattern=tests/unit",
+    "test:regression:images": "jest --runTestsByPath tests/unit/offscreen-image-bundle-zip.test.js tests/unit/service-worker-image-bundle-zip.test.js tests/unit/obsidian-markdown.test.js tests/unit/url-utils.test.js",
     "test:integration": "jest --testPathPattern=tests/integration",
     "test:e2e": "playwright test",
     "test:e2e:ci": "playwright test tests/e2e/extension.spec.js tests/e2e/notifications.spec.js tests/e2e/batch-processing.spec.js tests/e2e/command-download-regression.spec.js tests/e2e/click-clip.spec.js",

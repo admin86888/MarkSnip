@@ -2514,6 +2514,12 @@ async function preDownloadImages(imageList, markdown, providedOptions = null) {
      }
    } catch (error) {
      console.error('Error pre-downloading image:', error);
+     if (options.imageStyle != 'base64') {
+       newImageList[src] = filename;
+       Object.assign(sourceImageMap, markSnipObsidian.createObsidianSourceImageMap({
+         [src]: filename
+       }));
+     }
      resolve();
    }
  })));
