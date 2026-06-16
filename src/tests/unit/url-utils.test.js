@@ -197,7 +197,21 @@ describe('URL utils', () => {
       expect(filename).toContain('.idunno');
     });
 
-    test('infers image extension from WeChat wx_fmt query parameter', () => {
+    test('infers image extension from generic format query parameter', () => {
+      const options = {
+        title: 'Notes',
+        imagePrefix: ''
+      };
+      const filename = getImageFilename(
+        'https://cdn.example.test/image/640?format=webp',
+        options,
+        false
+      );
+
+      expect(filename).toBe('640.webp');
+    });
+
+    test('keeps wx_fmt as an image extension query parameter alias', () => {
       const options = {
         title: 'Notes',
         imagePrefix: ''
@@ -209,6 +223,20 @@ describe('URL utils', () => {
       );
 
       expect(filename).toBe('640.jpeg');
+    });
+
+    test('ignores query extension candidates that are not image formats', () => {
+      const options = {
+        title: 'Notes',
+        imagePrefix: ''
+      };
+      const filename = getImageFilename(
+        'https://cdn.example.test/image/640?type=thumbnail',
+        options,
+        false
+      );
+
+      expect(filename).toBe('640.idunno');
     });
 
     test('passes configured filename replacement to image filename sanitizer', () => {
@@ -275,9 +303,45 @@ describe('URL utils', () => {
       };
     }
 
-    test('prefers WeChat data-src over rewritten lazy loading src values', () => {
+    test('prefers data-src when src is the same image filename with rewritten query parameters', () => {
       const node = createImageNode({
         src: 'https://mmbiz.qpic.cn/mmbiz_png/example/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1',
+        'data-src': 'https://mmbiz.qpic.cn/mmbiz_jpg/example/640?wx_fmt=jpeg'
+      });
+
+      expect(resolveImageSource(node)).toBe('https://mmbiz.qpic.cn/mmbiz_jpg/example/640?wx_fmt=jpeg');
+    });
+
+    test('keeps src when lazy source points to a different image resource', () => {
+      const node = createImageNode({
+        src: 'https://cdn.example.test/images/photo.jpg?width=640',
+        'data-src': 'https://cdn.example.test/tracker/tiny.gif'
+      });
+
+      expect(resolveImageSource(node)).toBe('https://cdn.example.test/images/photo.jpg?width=640');
+    });
+
+    test('keeps src for same-origin same-filename lazy candidates without image format signals', () => {
+      const node = createImageNode({
+        src: 'https://cdn.example.test/cards/photo?size=640',
+        'data-src': 'https://cdn.example.test/profiles/photo?size=original'
+      });
+
+      expect(resolveImageSource(node)).toBe('https://cdn.example.test/cards/photo?size=640');
+    });
+
+    test('prefers data-src over rewritten lazy loading src values on the same path', () => {
+      const node = createImageNode({
+        src: 'https://cdn.example.test/images/640?format=jpeg&proxy=webp',
+        'data-src': 'https://cdn.example.test/images/640?format=jpeg'
+      });
+
+      expect(resolveImageSource(node)).toBe('https://cdn.example.test/images/640?format=jpeg');
+    });
+
+    test('falls back to data-src for WeChat lazy images when the rewritten src keeps the same path', () => {
+      const node = createImageNode({
+        src: 'https://mmbiz.qpic.cn/mmbiz_jpg/example/640?wx_fmt=jpeg&tp=webp&wxfrom=5&wx_lazy=1',
         'data-src': 'https://mmbiz.qpic.cn/mmbiz_jpg/example/640?wx_fmt=jpeg'
       });
 

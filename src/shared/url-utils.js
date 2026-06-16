@@ -108,13 +108,40 @@
     return '';
   }
 
-  function hasLazyImageRewriteMarkers(src) {
-    const parsedUrl = safeParseUrl(src);
-    if (!parsedUrl) {
+  function isSameImageResourcePath(firstSrc, secondSrc) {
+    const firstUrl = safeParseUrl(firstSrc);
+    const secondUrl = safeParseUrl(secondSrc);
+    if (!firstUrl || !secondUrl) {
       return false;
     }
 
-    return ['wx_lazy', 'wxfrom', 'wx_co'].some((name) => parsedUrl.searchParams.has(name));
+    if (firstUrl.origin !== secondUrl.origin) {
+      return false;
+    }
+
+    if (firstUrl.pathname === secondUrl.pathname) {
+      return true;
+    }
+
+    const firstName = firstUrl.pathname.split('/').filter(Boolean).pop();
+    const secondName = secondUrl.pathname.split('/').filter(Boolean).pop();
+    if (!firstName || !secondName || firstName !== secondName) {
+      return false;
+    }
+
+    return Boolean(getImageExtensionFromQuery(firstSrc) && getImageExtensionFromQuery(secondSrc));
+  }
+
+  function shouldPreferLazyImageSource(src, lazySource) {
+    if (!lazySource) {
+      return false;
+    }
+
+    if (!isUsableImageSrc(src)) {
+      return true;
+    }
+
+    return isSameImageResourcePath(src, lazySource) && src !== lazySource;
   }
 
   function resolveImageSource(node) {
@@ -125,18 +152,45 @@
     const src = normalizeImageSourceValue(node.getAttribute('src'));
     const lazySource = getLazyImageSource(node);
 
-    if (lazySource && (!isUsableImageSrc(src) || hasLazyImageRewriteMarkers(src))) {
+    if (shouldPreferLazyImageSource(src, lazySource)) {
       return lazySource;
     }
 
     return src;
   }
 
+  const IMAGE_EXTENSION_QUERY_PARAMETERS = Object.freeze([
+    'format',
+    'fmt',
+    'ext',
+    'extension',
+    'type',
+    'wx_fmt'
+  ]);
+
+  const IMAGE_EXTENSION_QUERY_VALUES = new Set([
+    'avif',
+    'bmp',
+    'gif',
+    'heic',
+    'heif',
+    'ico',
+    'jpeg',
+    'jpg',
+    'png',
+    'svg',
+    'tif',
+    'tiff',
+    'webp'
+  ]);
+
   function getImageExtensionFromQuery(src) {
     const parsedUrl = safeParseUrl(src);
-    const extension = parsedUrl?.searchParams?.get('wx_fmt');
-    if (/^[a-zA-Z]+$/.test(extension || '')) {
-      return extension;
+    for (const parameterName of IMAGE_EXTENSION_QUERY_PARAMETERS) {
+      const extension = String(parsedUrl?.searchParams?.get(parameterName) || '').trim().toLowerCase();
+      if (IMAGE_EXTENSION_QUERY_VALUES.has(extension)) {
+        return extension;
+      }
     }
     return '';
   }
