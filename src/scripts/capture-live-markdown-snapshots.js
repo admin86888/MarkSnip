@@ -467,12 +467,25 @@ function buildCaseRecord(versionLabel, liveCase, result, options) {
     : liveCase.baseSnippets || [];
   const expectedSnippets = [...(liveCase.snippets || []), ...versionSnippets];
   const missingSnippets = expectedSnippets.filter(snippet => !markdown.includes(snippet));
-  const markdownImageCount = (markdown.match(/!\[[^\]]*]\([^)]*\)/g) || []).length;
+  const markdownImages = markdown.match(/!\[[^\]]*]\([^)]*\)/g) || [];
+  const markdownImageCount = markdownImages.length;
+  const markdownImageExtensions = Array.from(new Set(markdownImages
+    .map(image => image.match(/\.([a-z0-9_-]+)(?:[?#][^)]*)?\)$/i)?.[1]?.toLowerCase())
+    .filter(Boolean)))
+    .sort();
+  const missingMarkdownImageExtensions = (liveCase.expectedMarkdownImageExtensions || [])
+    .map(extension => String(extension || '').replace(/^\.+/, '').toLowerCase())
+    .filter(Boolean)
+    .filter(extension => !markdownImageExtensions.includes(extension));
   const imageCountMismatch = Number.isInteger(liveCase.expectedMarkdownImageCount) &&
     markdownImageCount !== liveCase.expectedMarkdownImageCount;
 
   const baseStatus = result.status || (result.ok ? 'passed' : 'failed');
-  const status = baseStatus === 'passed' && (missingSnippets.length > 0 || imageCountMismatch)
+  const status = baseStatus === 'passed' && (
+    missingSnippets.length > 0 ||
+    imageCountMismatch ||
+    missingMarkdownImageExtensions.length > 0
+  )
     ? 'failed'
     : baseStatus;
   const blocked = status === 'captcha-blocked' || status === 'permission-blocked';
@@ -501,7 +514,10 @@ function buildCaseRecord(versionLabel, liveCase, result, options) {
       expectedMarkdownImageCount: Number.isInteger(liveCase.expectedMarkdownImageCount)
         ? liveCase.expectedMarkdownImageCount
         : null,
-      imageCountMismatch
+      imageCountMismatch,
+      markdownImageExtensions,
+      expectedMarkdownImageExtensions: liveCase.expectedMarkdownImageExtensions || null,
+      missingMarkdownImageExtensions
     }
   };
 }

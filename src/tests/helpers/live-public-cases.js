@@ -147,7 +147,16 @@ const liveClipCases = [
     url: 'https://mp.weixin.qq.com/s/2kWi0Fld09fNMVIUg9ddKQ',
     selector: '#activity-name',
     titleContains: 'AI 不缺智商缺纪律：我的 Harness 工程化实践',
+    storageOptions: {
+      downloadImages: true,
+      downloadMode: 'downloadsApi',
+      imagePlacement: 'sameFolder',
+      imagePrefix: '',
+      imageStyle: 'markdown',
+      imageRefStyle: 'inlined'
+    },
     expectedMarkdownImageCount: 12,
+    expectedMarkdownImageExtensions: ['jpeg', 'png', 'webp'],
     snippets: [
       'AI 不缺智商缺纪律：我的 Harness 工程化实践',
       'harness = 把"AI 该怎么干活"固化成可执行、可约束、可评测的工程框架'
@@ -158,9 +167,9 @@ const liveClipCases = [
       'wx_fmt=webp'
     ],
     currentSnippets: [
-      'wx_fmt=jpeg',
-      'wx_fmt=png',
-      'wx_fmt=webp'
+      '](640.jpeg)',
+      '](640.png)',
+      '](640.webp)'
     ]
   }
 ];

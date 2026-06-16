@@ -83,6 +83,7 @@ function createOffscreenSandbox() {
     markSnipObsidian: obsidianUtils,
     markSnipUrlUtils: require('../../shared/url-utils'),
     mimedb: {
+      'image/jpeg': 'jpeg',
       'image/png': 'png'
     },
     URL: {
@@ -152,6 +153,121 @@ describe('offscreen image bundle ZIP downloads', () => {
     expect(result.sourceImageMap['Page/reachable.png']).toBe(reachableImageUrl);
     expect(result.sourceImageMap['Page/protected.png']).toBe(blockedImageUrl);
     expect(result.markdown).toBe('# Page\n\n![](Page/reachable.png)\n\n![](Page/protected.png)');
+  });
+
+  test('keeps markdown image suffix aligned with the predownloaded blob type', async () => {
+    const { sandbox, blobStore } = createOffscreenSandbox();
+    const imageBytes = Uint8Array.from([255, 216, 255, 224]);
+    const imageUrl = sandbox.URL.createObjectURL(new NodeBlob([imageBytes], { type: 'image/jpeg' }));
+
+    const result = await sandbox.preDownloadImages(
+      {
+        [imageUrl]: '640.webp'
+      },
+      '# Page\n\n![](640.webp)',
+      {
+        imageStyle: 'markdown'
+      }
+    );
+
+    const downloadedUrl = Object.keys(result.imageList)[0];
+
+    expect(result.markdown).toBe('# Page\n\n![](640.jpeg)');
+    expect(result.imageList[downloadedUrl]).toBe('640.jpeg');
+    expect(blobStore.get(downloadedUrl)).toBeTruthy();
+  });
+
+  test('keeps equivalent jpeg extensions unchanged after predownload', async () => {
+    const { sandbox } = createOffscreenSandbox();
+    const imageBytes = Uint8Array.from([255, 216, 255, 224]);
+    const imageUrl = sandbox.URL.createObjectURL(new NodeBlob([imageBytes], { type: 'image/jpeg' }));
+
+    const result = await sandbox.preDownloadImages(
+      {
+        [imageUrl]: 'photo.jpg'
+      },
+      '# Page\n\n![](photo.jpg)',
+      {
+        imageStyle: 'markdown'
+      }
+    );
+
+    const downloadedUrl = Object.keys(result.imageList)[0];
+
+    expect(result.markdown).toBe('# Page\n\n![](photo.jpg)');
+    expect(result.imageList[downloadedUrl]).toBe('photo.jpg');
+  });
+
+  test('keeps markdown references unique when blob type alignment creates filename collisions', async () => {
+    const { sandbox } = createOffscreenSandbox();
+    const firstImageUrl = sandbox.URL.createObjectURL(new NodeBlob([
+      Uint8Array.from([255, 216, 255, 224, 1])
+    ], { type: 'image/jpeg' }));
+    const secondImageUrl = sandbox.URL.createObjectURL(new NodeBlob([
+      Uint8Array.from([255, 216, 255, 224, 2])
+    ], { type: 'image/jpeg' }));
+
+    const result = await sandbox.preDownloadImages(
+      {
+        [firstImageUrl]: '640.jpeg',
+        [secondImageUrl]: '640.webp'
+      },
+      '# Page\n\n![first](640.jpeg)\n\n![second](640.webp)',
+      {
+        imageStyle: 'markdown'
+      }
+    );
+
+    expect(result.markdown).toBe('# Page\n\n![first](640.jpeg)\n\n![second](640.1.jpeg)');
+    expect(new Set(Object.values(result.imageList))).toEqual(new Set(['640.jpeg', '640.1.jpeg']));
+  });
+
+  test('rewrites only the matching occurrence when different images start with the same markdown filename', async () => {
+    const { sandbox } = createOffscreenSandbox();
+    const firstImageUrl = sandbox.URL.createObjectURL(new NodeBlob([
+      Uint8Array.from([255, 216, 255, 224, 1])
+    ], { type: 'image/jpeg' }));
+    const secondImageUrl = sandbox.URL.createObjectURL(new NodeBlob([
+      Uint8Array.from([255, 216, 255, 224, 2])
+    ], { type: 'image/jpeg' }));
+
+    const result = await sandbox.preDownloadImages(
+      {
+        [firstImageUrl]: '640.webp',
+        [secondImageUrl]: '640.webp'
+      },
+      '# Page\n\n![first](640.webp)\n\n![second](640.webp)',
+      {
+        imageStyle: 'markdown'
+      }
+    );
+
+    expect(result.markdown).toBe('# Page\n\n![first](640.jpeg)\n\n![second](640.1.jpeg)');
+    expect(Object.values(result.imageList)).toEqual(['640.jpeg', '640.1.jpeg']);
+  });
+
+  test('consumes unchanged markdown references before uniquifying a later duplicate filename', async () => {
+    const { sandbox } = createOffscreenSandbox();
+    const firstImageUrl = sandbox.URL.createObjectURL(new NodeBlob([
+      Uint8Array.from([255, 216, 255, 224, 1])
+    ], { type: 'image/jpeg' }));
+    const secondImageUrl = sandbox.URL.createObjectURL(new NodeBlob([
+      Uint8Array.from([255, 216, 255, 224, 2])
+    ], { type: 'image/jpeg' }));
+
+    const result = await sandbox.preDownloadImages(
+      {
+        [firstImageUrl]: 'photo.jpg',
+        [secondImageUrl]: 'photo.jpg'
+      },
+      '# Page\n\n![first](photo.jpg)\n\n![second](photo.jpg)',
+      {
+        imageStyle: 'markdown'
+      }
+    );
+
+    expect(result.markdown).toBe('# Page\n\n![first](photo.jpg)\n\n![second](photo.1.jpg)');
+    expect(Object.values(result.imageList)).toEqual(['photo.jpg', 'photo.1.jpg']);
   });
 
   test('stores binary ZIP entries without text encoding them', async () => {
