@@ -1496,7 +1496,9 @@ function turndown(content, options, article) {
       // Otherwise, convert to proper markdown link format
       const title = cleanAttribute(node.getAttribute('title'));
       const titlePart = title ? ` "${title}"` : '';
-      return `[${content}](${href}${titlePart})`
+      const isSingleImageLink = node.textContent.trim() === '' && node.querySelectorAll('img').length === 1;
+      const linkContent = isSingleImageLink ? content.trim() : content;
+      return `[${linkContent}](${href}${titlePart})`
     }
   });
 
